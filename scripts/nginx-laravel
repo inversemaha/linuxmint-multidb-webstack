@@ -1,0 +1,95 @@
+#!/bin/bash
+
+DOMAIN=$1
+PHP_VERSION=$2
+ROOT_DIR=$3
+
+if [ -z "$DOMAIN" ] || [ -z "$PHP_VERSION" ] || [ -z "$ROOT_DIR" ]; then
+    echo "Create Nginx config for Laravel"
+    echo ""
+    echo "Usage: nginx-laravel <domain> <php-version> <document-root>"
+    echo ""
+    echo "Example:"
+    echo "  nginx-laravel myapp.local 8.3 /var/www/myapp/public"
+    echo ""
+    exit 1
+fi
+
+ROOT_DIR="${ROOT_DIR/#\~/$HOME}"
+
+if [ ! -f "/usr/bin/php$PHP_VERSION" ]; then
+    echo "Error: PHP $PHP_VERSION not found"
+    echo "Available versions:"
+    ls /usr/bin/php[0-9]* 2>/dev/null | grep -oP 'php\K[0-9.]+'
+    exit 1
+fi
+
+sudo mkdir -p "$ROOT_DIR"
+sudo chown -R $USER:$USER "$(dirname "$ROOT_DIR")"
+
+CONFIG_FILE="/etc/nginx/sites-available/$DOMAIN"
+
+sudo tee "$CONFIG_FILE" > /dev/null <<EOF
+server {
+    listen 80;
+    listen [::]:80;
+    server_name $DOMAIN;
+    root $ROOT_DIR;
+    index index.php index.html index.htm;
+
+    charset utf-8;
+
+    location / {
+        try_files \$uri \$uri/ /index.php?\$query_string;
+    }
+
+    location = /favicon.ico { access_log off; log_not_found off; }
+    location = /robots.txt  { access_log off; log_not_found off; }
+
+    error_page 404 /index.php;
+
+    location ~ \.php\$ {
+        fastcgi_pass unix:/var/run/php/php${PHP_VERSION}-fpm.sock;
+        fastcgi_index index.php;
+        fastcgi_param SCRIPT_FILENAME \$realpath_root\$fastcgi_script_name;
+        include fastcgi_params;
+        fastcgi_hide_header X-Powered-By;
+    }
+
+    location ~ /\.(?!well-known).* {
+        deny all;
+    }
+
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-XSS-Protection "1; mode=block" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+}
+EOF
+
+sudo ln -sf "$CONFIG_FILE" /etc/nginx/sites-enabled/
+
+echo ""
+echo "Testing Nginx configuration..."
+sudo nginx -t
+
+if [ $? -eq 0 ]; then
+    echo ""
+    echo "✓ Site created successfully!"
+    echo ""
+    echo "Domain:     $DOMAIN"
+    echo "PHP:        $PHP_VERSION"
+    echo "Root:       $ROOT_DIR"
+    echo ""
+    echo "Next steps:"
+    echo "1. Add to /etc/hosts:"
+    echo "   127.0.0.1 $DOMAIN"
+    echo ""
+    echo "2. Start services:"
+    echo "   web-ctl php start"
+    echo "   web-ctl nginx restart"
+else
+    echo "✗ Nginx config test failed"
+    sudo rm -f "$CONFIG_FILE"
+    exit 1
+fi

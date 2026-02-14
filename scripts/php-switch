@@ -1,0 +1,43 @@
+#!/bin/bash
+
+VERSION=$1
+
+if [ -z "$VERSION" ]; then
+    echo "PHP Version Switcher"
+    echo "Usage: php-switch <version>"
+    echo ""
+    echo "Installed versions:"
+    for v in 7.2 7.3 7.4 8.0 8.1 8.2 8.3 8.4; do
+        if [ -f "/usr/bin/php$v" ]; then
+            current=""
+            [ "$(php -r 'echo PHP_MAJOR_VERSION.".".PHP_MINOR_VERSION;' 2>/dev/null)" = "$v" ] && current=" <-- current"
+            echo "  $v$current"
+        fi
+    done
+    exit 1
+fi
+
+if [ ! -f "/usr/bin/php$VERSION" ]; then
+    echo "Error: PHP $VERSION is not installed"
+    exit 1
+fi
+
+# Stop all PHP-FPM versions
+echo "Stopping all PHP-FPM services..."
+for v in 7.2 7.3 7.4 8.0 8.1 8.2 8.3 8.4; do
+    sudo systemctl stop php${v}-fpm 2>/dev/null || true
+done
+
+# Update alternatives
+sudo update-alternatives --set php /usr/bin/php$VERSION
+
+# Update composer
+sudo rm -f /usr/local/bin/composer
+sudo php$VERSION /tmp/composer-setup.php --install-dir=/usr/local/bin --filename=composer 2>/dev/null || \
+    curl -sS https://getcomposer.org/installer | sudo php$VERSION -- --install-dir=/usr/local/bin --filename=composer
+
+echo ""
+echo "✓ PHP $VERSION is now active (CLI)"
+echo ""
+echo "Start FPM:  sudo service php${VERSION}-fpm start"
+echo "Check:      php -v"
