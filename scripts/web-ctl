@@ -12,6 +12,9 @@ show_help() {
     echo "  mysql       MySQL Database"
     echo "  nginx       Nginx Web Server"
     echo "  php         PHP-FPM (current version)"
+    echo "  pg          PostgreSQL Database"
+    echo "  mongo       MongoDB Database"
+    echo "  redis       Redis Server"
     echo "  all         All services"
     echo ""
     echo "Actions:"
@@ -26,6 +29,9 @@ show_help() {
     echo "Examples:"
     echo "  web-ctl mysql start"
     echo "  web-ctl nginx restart"
+    echo "  web-ctl pg start"
+    echo "  web-ctl mongo start"
+    echo "  web-ctl redis start"
     echo "  web-ctl all start"
     echo "  web-ctl all status"
 }
@@ -93,6 +99,42 @@ case "$SERVICE" in
             *) echo "Usage: web-ctl php {start|stop|restart|status|list|enable|disable}" ;;
         esac
         ;;
+
+    pg|postgresql)
+        case "$ACTION" in
+            start)   echo "Starting PostgreSQL..."; sudo systemctl start postgresql ;;
+            stop)    echo "Stopping PostgreSQL..."; sudo systemctl stop postgresql ;;
+            restart) echo "Restarting PostgreSQL..."; sudo systemctl restart postgresql ;;
+            status)  sudo systemctl status postgresql ;;
+            enable)  sudo systemctl enable postgresql ;;
+            disable) sudo systemctl disable postgresql ;;
+            *) echo "Usage: web-ctl pg {start|stop|restart|status|enable|disable}" ;;
+        esac
+        ;;
+
+    mongo|mongodb)
+        case "$ACTION" in
+            start)   echo "Starting MongoDB..."; sudo systemctl start mongod ;;
+            stop)    echo "Stopping MongoDB..."; sudo systemctl stop mongod ;;
+            restart) echo "Restarting MongoDB..."; sudo systemctl restart mongod ;;
+            status)  sudo systemctl status mongod ;;
+            enable)  sudo systemctl enable mongod ;;
+            disable) sudo systemctl disable mongod ;;
+            *) echo "Usage: web-ctl mongo {start|stop|restart|status|enable|disable}" ;;
+        esac
+        ;;
+
+    redis)
+        case "$ACTION" in
+            start)   echo "Starting Redis..."; sudo systemctl start redis-server ;;
+            stop)    echo "Stopping Redis..."; sudo systemctl stop redis-server ;;
+            restart) echo "Restarting Redis..."; sudo systemctl restart redis-server ;;
+            status)  sudo systemctl status redis-server ;;
+            enable)  sudo systemctl enable redis-server ;;
+            disable) sudo systemctl disable redis-server ;;
+            *) echo "Usage: web-ctl redis {start|stop|restart|status|enable|disable}" ;;
+        esac
+        ;;
         
     all)
         case "$ACTION" in
@@ -102,6 +144,9 @@ case "$SERVICE" in
                 ACTIVE=$(get_active_php)
                 sudo systemctl start php${ACTIVE}-fpm
                 sudo systemctl start nginx
+                command -v psql &>/dev/null && sudo systemctl start postgresql
+                command -v mongod &>/dev/null && sudo systemctl start mongod
+                command -v redis-server &>/dev/null && sudo systemctl start redis-server
                 echo "✓ All services started"
                 web-ctl all status
                 ;;
@@ -112,6 +157,9 @@ case "$SERVICE" in
                     sudo systemctl stop php${v}-fpm 2>/dev/null || true
                 done
                 sudo systemctl stop mysql
+                command -v psql &>/dev/null && sudo systemctl stop postgresql
+                command -v mongod &>/dev/null && sudo systemctl stop mongod
+                command -v redis-server &>/dev/null && sudo systemctl stop redis-server
                 echo "✓ All services stopped"
                 ;;
             restart)
@@ -123,17 +171,23 @@ case "$SERVICE" in
                 echo "========================================"
                 echo "Service Status"
                 echo "========================================"
-                echo -n "MySQL:      "; sudo systemctl is-active mysql
-                echo -n "Nginx:      "; sudo systemctl is-active nginx
+                echo -n "MySQL:       "; sudo systemctl is-active mysql 2>/dev/null || echo "not installed"
+                echo -n "Nginx:       "; sudo systemctl is-active nginx 2>/dev/null || echo "not installed"
                 ACTIVE=$(get_active_php)
-                echo -n "PHP-FPM:    "; sudo systemctl is-active php${ACTIVE}-fpm
+                echo -n "PHP-FPM:     "; sudo systemctl is-active php${ACTIVE}-fpm 2>/dev/null || echo "not installed"
                 echo "  (Version: $ACTIVE)"
+                echo -n "PostgreSQL:  "; sudo systemctl is-active postgresql 2>/dev/null || echo "not installed"
+                echo -n "MongoDB:     "; sudo systemctl is-active mongod 2>/dev/null || echo "not installed"
+                echo -n "Redis:       "; sudo systemctl is-active redis-server 2>/dev/null || echo "not installed"
                 echo "========================================"
                 ;;
             enable)
                 sudo systemctl enable mysql nginx
                 ACTIVE=$(get_active_php)
                 sudo systemctl enable php${ACTIVE}-fpm
+                command -v psql &>/dev/null && sudo systemctl enable postgresql
+                command -v mongod &>/dev/null && sudo systemctl enable mongod
+                command -v redis-server &>/dev/null && sudo systemctl enable redis-server
                 echo "✓ All services enabled (auto-start on boot)"
                 ;;
             disable)
@@ -141,6 +195,9 @@ case "$SERVICE" in
                 for v in 7.2 7.3 7.4 8.0 8.1 8.2 8.3 8.4; do
                     sudo systemctl disable php${v}-fpm 2>/dev/null || true
                 done
+                command -v psql &>/dev/null && sudo systemctl disable postgresql
+                command -v mongod &>/dev/null && sudo systemctl disable mongod
+                command -v redis-server &>/dev/null && sudo systemctl disable redis-server
                 echo "✓ All services disabled (manual start only)"
                 ;;
             *) echo "Usage: web-ctl all {start|stop|restart|status|enable|disable}" ;;
